@@ -49,15 +49,19 @@ DSH does not expose the Electron `BrowserWindow` to plugins, so no plugin-side `
 
 ## Installation
 
+### From npm
+
+The package is published as [`dsh-pushpin`](https://www.npmjs.com/package/dsh-pushpin). A DSH plugin is not installed globally: the bundle goes into the profile's dependency list, and `pnpm` fetches it from the registry.
+
 ### From the plugin manager
 
 1. Open the DSH plugin manager (or the plugin marketplace, depending on your build).
-2. Install the `dsh-pushpin` bundle and enable it.
+2. Search for `dsh-pushpin`, install it and enable it.
 3. Restart DSH if the pushpin does not appear.
 
 ### From a profile
 
-Add the bundle to `~/.dsh/profiles/<profile>/package.json`. Both lists must contain it; the snippet below shows only the relevant fields, so keep your existing entries:
+Add the bundle to `~/.dsh/profiles/<profile>/package.json`. Both lists must contain it; the snippet shows only the relevant fields, so keep your existing entries:
 
 ```json
 {
@@ -72,11 +76,9 @@ Add the bundle to `~/.dsh/profiles/<profile>/package.json`. Both lists must cont
 }
 ```
 
-Then run the profile's install from that directory (`pnpm install`; DSH profiles are pnpm projects) and restart DSH. To develop against a checkout, use a `file:` specifier instead of a version number:
+Then run `pnpm install` from that directory and restart DSH. The version is resolved from the npm registry.
 
-```json
-"dsh-pushpin": "file:C:/path/to/dsh-pin-window"
-```
+To develop against a local checkout, replace the version number with a `file:` specifier pointing at that directory.
 
 ## Usage
 
@@ -167,8 +169,11 @@ DSH 不把 Electron 的窗口对象开放给插件，插件里没有 `setAlwaysO
 
 ## 安装
 
-1. 插件管理器（或插件市场）里安装 `dsh-pushpin` 这个 bundle，启用后重启 DSH。
-2. 手动：编辑 `~/.dsh/profiles/<profile>/package.json`，在 `dependencies` 和 `dsh.profile.bundles` 里同时加上 `dsh-pushpin`，在该目录执行 `pnpm install`，重启 DSH。本地开发可以把版本号换成本地路径，例如 `"dsh-pushpin": "file:C:/path/to/dsh-pin-window"`。
+已经发到 npm：https://www.npmjs.com/package/dsh-pushpin 。
+
+1. 插件管理器（或插件市场）里搜 `dsh-pushpin`，装上启用，钉子在重启 DSH 后出现。
+2. 手动：编辑 `~/.dsh/profiles/<profile>/package.json`，`dependencies` 和 `dsh.profile.bundles` 里同时加上 `dsh-pushpin`，在该目录跑 `pnpm install`，重启 DSH。版本号从 npm 官方源取。
+3. 本地改了代码想直接生效，把版本号换成指向本地目录的 `file:` 写法。
 
 ## 使用
 
