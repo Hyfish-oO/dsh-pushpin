@@ -40,35 +40,38 @@ window.__ModuleLoader__.load({
       failed: '改不动窗口状态',
     }
 
+    // Every colour is a DSH theme token, with a neutral fallback for host
+    // builds that rename or drop one. Nothing here picks a fixed palette.
     const CSS = [
       '.dpin-wrap{position:fixed;top:7px;right:146px;z-index:2147483000;',
       'display:inline-flex;align-items:center;pointer-events:none;',
       'user-select:none;-webkit-user-select:none;',
       'app-region:no-drag;-webkit-app-region:no-drag;}',
+      '.dpin-wrap--inline{position:relative;top:auto;right:auto;z-index:auto;}',
       '.dpin-bubble{position:absolute;top:calc(100% + 6px);right:0;padding:4px 8px;',
       'border-radius:6px;font-size:11px;line-height:1.35;white-space:nowrap;',
       'pointer-events:none;z-index:50;',
-      'background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 14%,transparent);',
-      'color:var(--dsw-alias-state-error-primary);',
-      'border:1px solid color-mix(in srgb,var(--dsw-alias-state-error-primary) 35%,transparent);',
+      'background:color-mix(in srgb,var(--dsw-alias-state-error-primary, #e5484d) 14%,transparent);',
+      'color:var(--dsw-alias-state-error-primary, #e5484d);',
+      'border:1px solid color-mix(in srgb,var(--dsw-alias-state-error-primary, #e5484d) 35%,transparent);',
       'box-shadow:0 4px 12px rgb(0 0 0 / 12%);}',
       '.dpin-btn{pointer-events:auto;app-region:no-drag;-webkit-app-region:no-drag;',
       'width:28px;height:28px;display:flex;align-items:center;justify-content:center;',
       'border-radius:8px;border:1px solid transparent;background:transparent;padding:0;',
-      'color:var(--dsw-alias-label-secondary);cursor:pointer;',
+      'color:var(--dsw-alias-label-secondary, #9aa2b1);cursor:pointer;',
       'transition:background .12s ease,color .12s ease,border-color .12s ease,transform .1s ease;}',
-      '.dpin-btn:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);',
-      'background:color-mix(in srgb,var(--dsw-alias-bg-layer-2) 55%,transparent);}',
+      '.dpin-btn:hover{color:var(--dsw-alias-label-primary, #e8eaef);background:var(--dsw-alias-bg-layer-2, #2a2d35);',
+      'background:color-mix(in srgb,var(--dsw-alias-bg-layer-2, #2a2d35) 55%,transparent);}',
       '.dpin-btn:active{transform:scale(.94);}',
-      '.dpin-btn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px;}',
-      '.dpin-btn--on{color:var(--dsw-alias-brand-primary);',
-      'border-color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-bg-layer-2);',
-      'background:color-mix(in srgb,var(--dsw-alias-brand-primary) 10%,transparent);}',
-      '.dpin-btn--on:hover{background:var(--dsw-alias-bg-layer-2);',
-      'background:color-mix(in srgb,var(--dsw-alias-brand-primary) 18%,transparent);',
-      'color:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);}',
+      '.dpin-btn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary, #4d6bfe);outline-offset:1px;}',
+      '.dpin-btn--on{color:var(--dsw-alias-brand-primary, #4d6bfe);',
+      'border-color:var(--dsw-alias-brand-primary, #4d6bfe);background:var(--dsw-alias-bg-layer-2, #2a2d35);',
+      'background:color-mix(in srgb,var(--dsw-alias-brand-primary, #4d6bfe) 10%,transparent);}',
+      '.dpin-btn--on:hover{background:var(--dsw-alias-bg-layer-2, #2a2d35);',
+      'background:color-mix(in srgb,var(--dsw-alias-brand-primary, #4d6bfe) 18%,transparent);',
+      'color:var(--dsw-alias-brand-primary, #4d6bfe);border-color:var(--dsw-alias-brand-primary, #4d6bfe);}',
       '.dpin-btn--busy{opacity:.55;cursor:default;}',
-      '.dpin-btn--error{color:var(--dsw-alias-state-error-primary);}',
+      '.dpin-btn--error{color:var(--dsw-alias-state-error-primary, #e5484d);}',
     ].join('')
 
     function apiUrl(path) {
@@ -205,7 +208,7 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { className: 'dpin-wrap' },
+        { className: 'dpin-wrap' + (props.mode === 'header' ? ' dpin-wrap--inline' : '') },
         h('style', null, CSS),
         h(
           'button',
@@ -240,8 +243,43 @@ window.__ModuleLoader__.load({
         return EN[key] !== undefined ? EN[key] : key
       }
 
+      // The frame-wide overlay puts the pin up in the title bar. A host build
+      // that does not declare it gets the session header instead: lower, but
+      // the same control, and still a real slot.
+      let headerOff = null
+      let overlaySeen = false
+
+      const placeInHeader = function () {
+        if (overlaySeen || headerOff) return
+        try {
+          ctx.slots.inject('conversation.session.header.utilities', function () {
+            headerOff = ctx.slots.register(
+              {
+                name: 'conversation.session.header.utilities',
+                id: SLOT_ID,
+                order: SLOT_ORDER,
+                label: function () {
+                  return m('pin')
+                },
+              },
+              function () {
+                return h(PinButton, { m: m, mode: 'header' })
+              },
+            )
+            return headerOff
+          })
+        } catch (cause) {
+          console.warn('[dsh-pin] no usable header slot in this host:', cause)
+        }
+      }
+
       try {
         ctx.slots.inject('shell.overlay', function () {
+          overlaySeen = true
+          if (typeof headerOff === 'function') {
+            headerOff()
+            headerOff = null
+          }
           return ctx.slots.register(
             {
               name: 'shell.overlay',
@@ -249,13 +287,15 @@ window.__ModuleLoader__.load({
               order: 90,
             },
             function () {
-              return h(PinButton, { m: m })
+              return h(PinButton, { m: m, mode: 'overlay' })
             },
           )
         })
       } catch (cause) {
         console.warn('[dsh-pin] shell.overlay is unavailable in this host:', cause)
       }
+
+      setTimeout(placeInHeader, 3000)
     }
 
     return {

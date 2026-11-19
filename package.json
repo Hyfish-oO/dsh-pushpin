@@ -2,7 +2,7 @@
   "name": "dsh-pushpin",
   "version": "0.1.0",
   "type": "module",
-  "description": "Pin the whole DeepSeek Harness window above other windows from a pushpin in the session header.",
+  "description": "Pin the whole DeepSeek Harness window above other windows from a pushpin in the title bar. Windows, Linux X11 and macOS (yabai).",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

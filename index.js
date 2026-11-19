@@ -1,21 +1,19 @@
 /**
- * Host half of the pin-window plugin.
+ * Host half of the pushpin plugin.
  *
  * DSH exposes no Electron BrowserWindow to a plugin, so nothing in the Host
- * can call `setAlwaysOnTop`. What a plugin can do is ask Windows directly:
- * `SetWindowPos(HWND_TOPMOST)` on the Harness main window.
+ * can call `setAlwaysOnTop`. Every backend here asks the operating system
+ * directly through whatever that platform actually offers:
  *
- * Spawning PowerShell per press costs most of a second, so this keeps one warm
- * server process and speaks to it one line at a time. The process is not held
- * forever: it is started on demand and released after `idleTimeoutMs` of no
- * use, so an installed-but-unused plugin costs nothing.
+ * - Windows: a warm PowerShell server driving `SetWindowPos(HWND_TOPMOST)`.
+ * - Linux (X11): `wmctrl` for the change and `xprop` for the read-back.
+ * - macOS: `yabai`, because the system ships no CLI for window level.
  *
- * Settings and the last known pin state live in two small JSON files under the
- * DSH home directory. Both are best-effort: a read or write failure degrades to
- * defaults instead of failing the request.
+ * A backend that cannot run reports why, and the client hides the button.
+ * State is always read back from the window manager, never assumed.
  */
 
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -23,7 +21,9 @@ import { fileURLToPath } from 'node:url'
 
 const STATE_PATH = '/dsh-pin/api/state'
 const TOGGLE_PATH = '/dsh-pin/api/toggle'
-const SERVER_SCRIPT = fileURLToPath(new URL('./scripts/pin-server.ps1', import.meta.url))
+const WINDOWS_SCRIPT = fileURLToPath(new URL('./scripts/pin-server.ps1', import.meta.url))
+const LINUX_SCRIPT = fileURLToPath(new URL('./scripts/pin-linux.sh', import.meta.url))
+const MACOS_SCRIPT = fileURLToPath(new URL('./scripts/pin-macos.sh', import.meta.url))
 
 const HOME_DIRECTORY = join(homedir(), '.dsh')
 const CONFIG_FILE = join(HOME_DIRECTORY, 'dsh-pin-window.json')
@@ -37,16 +37,34 @@ const DEFAULT_CONFIG = {
 }
 
 const REPLY_TIMEOUT_MS = 6000
+const SCRIPT_TIMEOUT_MS = 5000
 const RESTORE_DELAY_MS = 2500
 
-/** Codes the Client can turn into a sentence the user understands. */
 const FAILURE = {
-  ok: { text: 'ok' },
-  unsupportedPlatform: { code: 'unsupported-platform', text: '窗口置顶目前只支持 Windows' },
-  noWindow: { code: 'no-window', text: '没找到 DeepSeek Harness 的窗口' },
-  serverFailed: { code: 'server-failed', text: 'PowerShell 启动失败，可能被系统策略或安全软件拦住了' },
-  timeout: { code: 'timeout', text: 'PowerShell 没有响应，已经把它重启了' },
-  badOutput: { code: 'bad-output', text: 'PowerShell 返回了看不懂的内容' },
+  unsupportedPlatform: {
+    code: 'unsupported-platform',
+    text: '这个系统上没有可用的置顶接口',
+  },
+  missingTool: {
+    code: 'missing-tool',
+    text: '缺少系统工具，装好之后重启 DSH 就能用',
+  },
+  noWindow: {
+    code: 'no-window',
+    text: '没找到 DeepSeek Harness 的窗口',
+  },
+  serverFailed: {
+    code: 'server-failed',
+    text: '系统接口调用失败了',
+  },
+  timeout: {
+    code: 'timeout',
+    text: '系统接口没有响应',
+  },
+  badOutput: {
+    code: 'bad-output',
+    text: '系统接口返回了看不懂的内容',
+  },
 }
 
 function refusedOrigin(request, allowed) {
@@ -66,12 +84,12 @@ function sendJson(response, status, body) {
   response.end(text)
 }
 
-function parseLine(line) {
+function parseJsonLine(line) {
   try {
     const value = JSON.parse(line)
-    return value && typeof value === 'object' ? value : { ok: false, error: 'bad-output' }
+    return value && typeof value === 'object' ? value : null
   } catch {
-    return { ok: false, error: 'bad-output' }
+    return null
   }
 }
 
@@ -102,8 +120,7 @@ async function loadConfig() {
   const stored = await readJson(CONFIG_FILE, {})
   const idle = Number(stored.idleTimeoutMs)
   return {
-    idleTimeoutMs:
-      Number.isFinite(idle) && idle >= 0 ? idle : DEFAULT_CONFIG.idleTimeoutMs,
+    idleTimeoutMs: Number.isFinite(idle) && idle >= 0 ? idle : DEFAULT_CONFIG.idleTimeoutMs,
     restoreOnStart:
       typeof stored.restoreOnStart === 'boolean' ? stored.restoreOnStart : DEFAULT_CONFIG.restoreOnStart,
   }
@@ -111,12 +128,33 @@ async function loadConfig() {
 
 //#endregion
 
-/**
- * One warm powershell.exe, one request in flight at a time. Anything that goes
- * wrong tears the process down so the next press starts a clean one instead of
- * feeding a wedged pipe.
- */
-function createPinServer() {
+/** Run one short-lived script and parse its single JSON line. */
+function runScript(file, args, timeoutMs) {
+  return new Promise((resolve) => {
+    execFile(
+      file,
+      args,
+      { timeout: timeoutMs, windowsHide: true, encoding: 'utf8', maxBuffer: 256 * 1024 },
+      (error, stdout) => {
+        const line = String(stdout ?? '')
+          .split(/\r?\n/)
+          .map((value) => value.trim())
+          .filter((value) => value.startsWith('{'))
+          .pop()
+        if (!line) {
+          resolve({ ok: false, error: error ? 'server-failed' : 'bad-output' })
+          return
+        }
+        const parsed = parseJsonLine(line)
+        resolve(parsed ?? { ok: false, error: 'bad-output' })
+      },
+    )
+  })
+}
+
+//#region Windows backend: one warm powershell.exe
+
+function createWindowsBackend() {
   const state = {
     child: null,
     ready: false,
@@ -179,7 +217,7 @@ function createPinServer() {
     state.inFlight = null
     if (job) {
       clearTimeout(job.timer)
-      job.resolve(parseLine(line))
+      job.resolve(parseJsonLine(line) ?? { ok: false, error: 'bad-output' })
     }
     pump()
   }
@@ -190,7 +228,7 @@ function createPinServer() {
     try {
       child = spawn(
         'powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SERVER_SCRIPT],
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', WINDOWS_SCRIPT],
         { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true },
       )
     } catch {
@@ -258,25 +296,65 @@ function createPinServer() {
     })
   }
 
-  function stop() {
-    state.queue.length = 0
-    failInFlight('idle')
-    stopChild()
+  return {
+    id: 'windows',
+    available: true,
+    ask,
+    stop() {
+      state.queue.length = 0
+      failInFlight('idle')
+      stopChild()
+    },
+    close() {
+      state.closed = true
+      this.stop()
+    },
   }
+}
 
-  function close() {
-    state.closed = true
-    stop()
+//#endregion
+
+//#region script backends: Linux and macOS
+
+function createScriptBackend(id, script) {
+  return {
+    id,
+    available: true,
+    ask(action) {
+      return runScript('bash', [script, action], SCRIPT_TIMEOUT_MS)
+    },
+    stop() {},
+    close() {},
   }
+}
 
-  return { ask, stop, close }
+/** A backend that stays silent: the profile cannot do the job here. */
+function createMissingBackend(id) {
+  return {
+    id,
+    available: false,
+    ask() {
+      return Promise.resolve({ ok: false, error: 'missing-tool' })
+    },
+    stop() {},
+    close() {},
+  }
+}
+
+//#endregion
+
+function createBackend(platform) {
+  if (platform === 'win32') return createWindowsBackend()
+  if (platform === 'linux') return createScriptBackend('linux', LINUX_SCRIPT)
+  if (platform === 'darwin') return createScriptBackend('macos', MACOS_SCRIPT)
+  return createMissingBackend(platform)
 }
 
 export const inject = ['webServer']
 
 export function apply(ctx) {
-  const supported = process.platform === 'win32'
-  const server = createPinServer()
+  const backend = createBackend(process.platform)
+  const server = backend
 
   let config = { ...DEFAULT_CONFIG }
   let idleTimer = null
@@ -286,10 +364,10 @@ export function apply(ctx) {
       clearTimeout(idleTimer)
       idleTimer = null
     }
-    if (!supported || config.idleTimeoutMs <= 0) return
+    if (!backend.available || config.idleTimeoutMs <= 0) return
     idleTimer = setTimeout(() => {
       idleTimer = null
-      server.stop()
+      backend.stop()
     }, config.idleTimeoutMs)
     if (idleTimer.unref) idleTimer.unref()
   }
@@ -299,17 +377,26 @@ export function apply(ctx) {
   }
 
   const ask = async (action) => {
-    const reply = await server.ask(action)
+    const reply = await backend.ask(action)
     touchIdle()
     if (reply && reply.ok === true) rememberState(reply.topmost)
     return reply
   }
 
-  const fail = (failure, extra) => ({
+  const toFailure = (reply) => {
+    const code = reply && reply.error
+    if (code === 'missing-tool') return FAILURE.missingTool
+    if (code === 'no-window') return FAILURE.noWindow
+    if (code === 'timeout') return FAILURE.timeout
+    if (code === 'bad-output') return FAILURE.badOutput
+    return FAILURE.serverFailed
+  }
+
+  const fail = (failure, detail) => ({
     ok: false,
     error: failure.code,
     message: failure.text,
-    ...(extra === undefined ? {} : { detail: extra }),
+    ...(typeof detail === 'string' ? { detail } : {}),
   })
 
   const guard = (request, response) => {
@@ -328,27 +415,24 @@ export function apply(ctx) {
     }
     if (!guard(request, response)) return
 
-    if (!supported) {
-      sendJson(response, 200, { ...fail(FAILURE.unsupportedPlatform), supported: false, platform: process.platform })
-      return
-    }
-
     const reply = await ask('get')
     if (reply && reply.ok === true) {
       sendJson(response, 200, {
         ok: true,
         supported: true,
         platform: process.platform,
+        backend: backend.id,
         topmost: reply.topmost === true,
-        hwnd: reply.hwnd,
-        pid: reply.pid,
         readAt: Date.now(),
       })
       return
     }
-    const failure =
-      reply && reply.error === 'no-window' ? FAILURE.noWindow : reply && reply.error === 'timeout' ? FAILURE.timeout : FAILURE.serverFailed
-    sendJson(response, 200, { ...fail(failure, reply && reply.error), supported: true, platform: process.platform })
+    sendJson(response, 200, {
+      ...fail(toFailure(reply), reply && reply.error),
+      supported: backend.available,
+      platform: process.platform,
+      backend: backend.id,
+    })
   }
 
   const toggleHandler = async (request, response) => {
@@ -358,11 +442,6 @@ export function apply(ctx) {
       return
     }
     if (!guard(request, response)) return
-
-    if (!supported) {
-      sendJson(response, 200, { ...fail(FAILURE.unsupportedPlatform), supported: false, platform: process.platform })
-      return
-    }
 
     let action = 'toggle'
     try {
@@ -385,35 +464,22 @@ export function apply(ctx) {
         ok: true,
         supported: true,
         topmost: reply.topmost === true,
-        hwnd: reply.hwnd,
       })
       return
     }
-    const failure =
-      reply && reply.error === 'no-window'
-        ? FAILURE.noWindow
-        : reply && reply.error === 'timeout'
-          ? FAILURE.timeout
-          : reply && reply.error === 'bad-output'
-            ? FAILURE.badOutput
-            : FAILURE.serverFailed
-    sendJson(response, 200, { ...fail(failure, reply && reply.error), supported: true })
+    sendJson(response, 200, { ...fail(toFailure(reply), reply && reply.error), supported: backend.available })
   }
 
   ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: STATE_PATH, handler: stateHandler }))
   ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: TOGGLE_PATH, handler: toggleHandler }))
   ctx.effect(() => () => {
     if (idleTimer) clearTimeout(idleTimer)
-    server.close()
+    backend.close()
   })
 
-  if (!supported) return
-
-  // Restore the last pin state once the window exists. Two attempts: at plugin
-  // load the BrowserWindow may not be up yet, and a miss is silent.
   void (async () => {
     config = await loadConfig()
-    if (!config.restoreOnStart) return
+    if (!config.restoreOnStart || !backend.available) return
     const stored = await readJson(STATE_FILE, {})
     if (stored.pinned !== true) return
     const attempt = async (remaining) => {

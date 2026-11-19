@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Pushpin",
-    "description": "Pins the whole DeepSeek Harness window above other windows from a pushpin in the session header. Windows only.",
+    "description": "Pins the whole DeepSeek Harness window above other windows from a pushpin in the title bar. Windows out of the box; Linux needs wmctrl/xprop; macOS needs yabai.",
     "detail": "docs/DETAIL.md"
   }
 }
