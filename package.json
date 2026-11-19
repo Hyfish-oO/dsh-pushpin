@@ -13,7 +13,9 @@
     "index.js",
     "client.js",
     "cordis.patch.yml",
-    "scripts",
+    "scripts/pin-server.ps1",
+    "scripts/pin-linux.sh",
+    "scripts/pin-macos.sh",
     "locale/*.json",
     "docs",
     "icon.svg",
@@ -34,9 +36,11 @@
   "keywords": [
     "dsh",
     "dsh-plugin",
-    "windows",
     "always-on-top",
-    "window"
+    "window-pin",
+    "windows",
+    "linux",
+    "macos"
   ],
   "repository": {
     "type": "git",

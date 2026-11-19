@@ -15,7 +15,7 @@ DSH 没有把 Electron 的窗口对象开放给插件，所以插件走操作系
 
 ## 配置
 
-配置文件 `%USERPROFILE%\.dsh\dsh-pin-window.json`，不存在时全部使用默认值：
+配置文件 `~/.dsh/dsh-pin-window.json`，不存在时全部使用默认值：
 
 - `idleTimeoutMs`：数字，默认 `120000`。Windows 上常驻进程闲置多久后退出，`0` 表示不自动退出。
 - `restoreOnStart`：布尔，默认 `true`。重启 DSH 后是否恢复上次的置顶状态。

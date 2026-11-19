@@ -57,7 +57,7 @@ DSH does not expose the Electron `BrowserWindow` to plugins, so no plugin-side `
 
 ### From a profile
 
-Add the bundle to `%USERPROFILE%\.dsh\profiles\<profile>\package.json`. Both lists must contain it; the snippet below shows only the relevant fields, so keep your existing entries:
+Add the bundle to `~/.dsh/profiles/<profile>/package.json`. Both lists must contain it; the snippet below shows only the relevant fields, so keep your existing entries:
 
 ```json
 {
@@ -88,7 +88,7 @@ Then run the profile's install from that directory (`pnpm install`; DSH profiles
 
 ## Configuration
 
-Optional file: `%USERPROFILE%\.dsh\dsh-pin-window.json`. It is not created automatically; the plugin only reads it.
+Optional file: `~/.dsh/dsh-pin-window.json`. It is not created automatically; the plugin only reads it.
 
 ```json
 {
@@ -168,7 +168,7 @@ DSH 不把 Electron 的窗口对象开放给插件，插件里没有 `setAlwaysO
 ## 安装
 
 1. 插件管理器（或插件市场）里安装 `dsh-pushpin` 这个 bundle，启用后重启 DSH。
-2. 手动：编辑 `%USERPROFILE%\.dsh\profiles\<profile>\package.json`，在 `dependencies` 和 `dsh.profile.bundles` 里同时加上 `dsh-pushpin`，在该目录执行 `pnpm install`，重启 DSH。本地开发可以把版本号换成本地路径，例如 `"dsh-pushpin": "file:C:/path/to/dsh-pin-window"`。
+2. 手动：编辑 `~/.dsh/profiles/<profile>/package.json`，在 `dependencies` 和 `dsh.profile.bundles` 里同时加上 `dsh-pushpin`，在该目录执行 `pnpm install`，重启 DSH。本地开发可以把版本号换成本地路径，例如 `"dsh-pushpin": "file:C:/path/to/dsh-pin-window"`。
 
 ## 使用
 
@@ -180,7 +180,7 @@ DSH 不把 Electron 的窗口对象开放给插件，插件里没有 `setAlwaysO
 
 ## 配置
 
-可选文件 `%USERPROFILE%\.dsh\dsh-pin-window.json`，插件不会自动创建它，只读取。
+可选文件 `~/.dsh/dsh-pin-window.json`，插件不会自动创建它，只读取。
 
 | 字段 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
