@@ -44,10 +44,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/USERNAME/dsh-pushpin"
+    "url": "https://github.com/Hyfish-oO/dsh-pushpin"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/dsh-pushpin/issues"
+    "url": "https://github.com/Hyfish-oO/dsh-pushpin/issues"
   },
   "scripts": {
     "test": "node test/smoke.mjs",
