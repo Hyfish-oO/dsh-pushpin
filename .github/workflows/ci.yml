@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: |
+          node --check index.js
+          node --check client.js
+          node --check scripts/publish-check.mjs
+          node --check test/smoke.mjs
+      - name: Smoke test
+        # The smoke test pins a real window; it skips itself off Windows.
+        run: npm test
+      - name: Release gate
+        run: npm run check

@@ -1,0 +1,52 @@
+{
+  "name": "dsh-pushpin",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Pin the whole DeepSeek Harness window above other windows from a pushpin in the session header.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "scripts",
+    "locale/*.json",
+    "docs",
+    "icon.svg",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "windows",
+    "always-on-top",
+    "window"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/USERNAME/dsh-pushpin"
+  },
+  "bugs": {
+    "url": "https://github.com/USERNAME/dsh-pushpin/issues"
+  },
+  "scripts": {
+    "test": "node test/smoke.mjs",
+    "check": "node scripts/publish-check.mjs"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Pushpin",
+    "description": "Pins the whole DeepSeek Harness window above other windows from a pushpin in the session header. Windows only.",
+    "detail": "docs/DETAIL.md"
+  }
+}

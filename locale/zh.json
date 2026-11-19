@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "窗口置顶",
+    "description": "会话头部右上角一颗钉子，点一下把整个 DeepSeek Harness 窗口钉在别的窗口上面。仅支持 Windows。",
+    "detail": "docs/DETAIL.md"
+  }
+}
